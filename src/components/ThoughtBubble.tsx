@@ -15,6 +15,7 @@ interface ThoughtBubbleProps {
   color: BubbleColor;
   isNew?: boolean;
   readyToEdit?: boolean;
+  zoom?: number;
   onSizeChange: (id: string, newSize: number) => void;
   onTextChange: (id: string, newText: string) => void;
   onColorChange: (id: string, newColor: BubbleColor) => void;
@@ -37,6 +38,7 @@ export function ThoughtBubble({
   color,
   isNew,
   readyToEdit,
+  zoom = 1,
   onSizeChange,
   onTextChange,
   onColorChange,
@@ -113,8 +115,9 @@ export function ThoughtBubble({
     }
   }, [isEditing, isNew]);
 
-  // Calculate font size based on bubble size
-  const fontSize = Math.max(10, Math.min(16, size / 12));
+  // Calculate font size based on bubble size, scaled inversely with zoom
+  const baseFontSize = Math.max(10, Math.min(16, size / 12));
+  const fontSize = baseFontSize / zoom;
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>

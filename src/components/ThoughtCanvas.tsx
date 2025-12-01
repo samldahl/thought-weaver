@@ -19,6 +19,7 @@ const MIN_SIZE = 60;
 const INITIAL_SIZE = 40;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
+const MAX_SIZE_VH = 0.5; // 50% of viewport height
 
 export function ThoughtCanvas() {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
@@ -105,8 +106,9 @@ export function ThoughtCanvas() {
 
       setThoughts((prev) => [...prev, newThought]);
 
-      // Start growing animation
+      // Start growing animation with easing
       const lastTime = performance.now();
+      const maxSize = window.innerHeight * MAX_SIZE_VH;
 
       const grow = (time: number) => {
         if (!growingRef.current || growingRef.current.id !== newId) return;
@@ -115,9 +117,17 @@ export function ThoughtCanvas() {
         growingRef.current.lastTime = time;
 
         setThoughts((prev) =>
-          prev.map((t) =>
-            t.id === newId ? { ...t, size: t.size + dt * 0.15 } : t
-          )
+          prev.map((t) => {
+            if (t.id !== newId) return t;
+            
+            // Easing: growth rate slows as size approaches maxSize
+            // Using asymptotic curve: rate = baseRate * (1 - size/maxSize)^2
+            const progress = Math.min(t.size / maxSize, 0.95);
+            const easedRate = 0.4 * Math.pow(1 - progress, 2);
+            const newSize = Math.min(t.size + dt * easedRate, maxSize);
+            
+            return { ...t, size: newSize };
+          })
         );
 
         growingRef.current.animationId = requestAnimationFrame(grow);
@@ -233,6 +243,7 @@ export function ThoughtCanvas() {
             key={thought.id}
             {...thought}
             readyToEdit={thought.readyToEdit}
+            zoom={zoom}
             onSizeChange={handleSizeChange}
             onTextChange={handleTextChange}
             onColorChange={handleColorChange}
