@@ -259,7 +259,7 @@ export function ThoughtCanvas() {
 
       {/* Instructions overlay */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-sm bg-background/80 backdrop-blur-sm px-4 py-2 rounded-full border border-border">
-        Click & drag to create • Scroll to zoom • Middle-click to pan
+        Click & drag to create • Double-click to edit • Delete key to remove • Scroll to zoom
       </div>
     </div>
   );
