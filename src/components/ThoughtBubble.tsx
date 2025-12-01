@@ -43,13 +43,14 @@ export function ThoughtBubble({
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; bubbleX: number; bubbleY: number } | null>(null);
+  const hasDraggedRef = useRef(false);
 
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isNew && !isDragging) {
+    if (!isNew && !hasDraggedRef.current) {
       setPopoverOpen(true);
     }
-  }, [isNew, isDragging]);
+  }, [isNew]);
 
   const handleBlur = useCallback(() => {
     setIsEditing(false);
@@ -121,6 +122,7 @@ export function ThoughtBubble({
     if (isNew || isEditing || e.button !== 0) return;
     
     e.stopPropagation();
+    hasDraggedRef.current = false;
     setIsDragging(true);
     dragStartRef.current = {
       mouseX: e.clientX,
@@ -138,6 +140,11 @@ export function ThoughtBubble({
       
       const dx = (e.clientX - dragStartRef.current.mouseX) / zoom;
       const dy = (e.clientY - dragStartRef.current.mouseY) / zoom;
+      
+      // Mark as dragged if moved more than 3 pixels
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        hasDraggedRef.current = true;
+      }
       
       onPositionChange(
         id,
@@ -203,7 +210,7 @@ export function ThoughtBubble({
           }}
           tabIndex={0}
           onMouseDown={handleMouseDown}
-          onDoubleClick={handleDoubleClick}
+          onClick={handleClick}
           onKeyDown={handleKeyDown}
         >
           {isEditing ? (
