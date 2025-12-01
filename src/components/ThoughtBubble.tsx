@@ -183,6 +183,25 @@ export function ThoughtBubble({
     }
   }, [isEditing, isNew]);
 
+  // Listen for Delete key when popover is open
+  useEffect(() => {
+    if (!popoverOpen) return;
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        setPopoverOpen(false);
+        onDelete(id);
+      }
+      if (e.key === "Escape") {
+        setPopoverOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyPress);
+    return () => document.removeEventListener("keydown", handleKeyPress);
+  }, [popoverOpen, id, onDelete]);
+
   // Calculate font size based on bubble size, scaled inversely with zoom
   const baseFontSize = Math.max(10, Math.min(16, size / 12));
   const fontSize = baseFontSize / zoom;
