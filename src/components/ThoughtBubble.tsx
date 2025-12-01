@@ -4,30 +4,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Trash2, Minus, Plus } from "lucide-react";
 
-export type BubbleColor = "rose" | "mint" | "sky";
-
 interface ThoughtBubbleProps {
   id: string;
   x: number;
   y: number;
   size: number;
   text: string;
-  color: BubbleColor;
+  color: string; // Now a hex color
   isNew?: boolean;
   readyToEdit?: boolean;
   zoom?: number;
   onSizeChange: (id: string, newSize: number) => void;
   onTextChange: (id: string, newText: string) => void;
-  onColorChange: (id: string, newColor: BubbleColor) => void;
   onDelete: (id: string) => void;
   onFinishNew: (id: string) => void;
 }
-
-const COLORS: { value: BubbleColor; label: string }[] = [
-  { value: "rose", label: "Rose" },
-  { value: "mint", label: "Mint" },
-  { value: "sky", label: "Sky" },
-];
 
 export function ThoughtBubble({
   id,
@@ -41,7 +32,6 @@ export function ThoughtBubble({
   zoom = 1,
   onSizeChange,
   onTextChange,
-  onColorChange,
   onDelete,
   onFinishNew,
 }: ThoughtBubbleProps) {
@@ -49,16 +39,6 @@ export function ThoughtBubble({
   const [editText, setEditText] = useState(text);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  const colorClass = {
-    rose: "thought-bubble-rose",
-    mint: "thought-bubble-mint",
-    sky: "thought-bubble-sky",
-  }[color];
-
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-  }, []);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -135,7 +115,6 @@ export function ThoughtBubble({
         <div
           className={cn(
             "thought-bubble",
-            colorClass,
             !isNew && "cursor-pointer",
             "focus:outline-none focus:ring-2 focus:ring-primary/50"
           )}
@@ -145,9 +124,10 @@ export function ThoughtBubble({
             left: x - size / 2,
             top: y - size / 2,
             fontSize: `${fontSize}px`,
+            backgroundColor: `${color}40`,
+            borderColor: `${color}60`,
           }}
           tabIndex={0}
-          onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onKeyDown={handleKeyDown}
         >
@@ -162,6 +142,7 @@ export function ThoughtBubble({
               className="w-full h-full bg-transparent text-center resize-none outline-none text-foreground placeholder:text-foreground/40"
               style={{ fontSize: `${fontSize}px` }}
               onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             />
           ) : (
             <span className="text-foreground/80 pointer-events-none px-2">
@@ -195,29 +176,6 @@ export function ThoughtBubble({
               >
                 <Plus className="h-3 w-3" />
               </Button>
-            </div>
-          </div>
-
-          {/* Color picker */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Color</label>
-            <div className="flex gap-2">
-              {COLORS.map((c) => (
-                <button
-                  key={c.value}
-                  className={cn(
-                    "w-8 h-8 rounded-full border-2 transition-all",
-                    c.value === "rose" && "bg-bubble-rose/50",
-                    c.value === "mint" && "bg-bubble-mint/50",
-                    c.value === "sky" && "bg-bubble-sky/50",
-                    color === c.value
-                      ? "border-foreground scale-110"
-                      : "border-transparent hover:scale-105"
-                  )}
-                  onClick={() => onColorChange(id, c.value)}
-                  title={c.label}
-                />
-              ))}
             </div>
           </div>
 
