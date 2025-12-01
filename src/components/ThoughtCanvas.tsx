@@ -201,6 +201,12 @@ export function ThoughtCanvas() {
     );
   }, []);
 
+  const handlePositionChange = useCallback((id: string, newX: number, newY: number) => {
+    setThoughts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, x: newX, y: newY } : t))
+    );
+  }, []);
+
   const handleDelete = useCallback((id: string) => {
     const thought = thoughts.find(t => t.id === id);
     if (thought) {
@@ -259,6 +265,7 @@ export function ThoughtCanvas() {
             zoom={zoom}
             onSizeChange={handleSizeChange}
             onTextChange={handleTextChange}
+            onPositionChange={handlePositionChange}
             onDelete={handleDelete}
             onFinishNew={handleFinishNew}
           />
@@ -283,7 +290,7 @@ export function ThoughtCanvas() {
 
       {/* Instructions overlay */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-sm bg-background/80 backdrop-blur-sm px-4 py-2 rounded-full border border-border">
-        Click & drag to create • Double-click to edit • Delete key to remove • Scroll to zoom
+        Click & drag to create • Drag bubbles to move • Double-click to edit • Delete key to remove • Scroll to zoom
       </div>
     </div>
   );
