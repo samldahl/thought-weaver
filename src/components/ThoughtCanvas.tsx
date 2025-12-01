@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ThoughtBubble, BubbleColor } from "./ThoughtBubble";
+import { Button } from "@/components/ui/button";
+import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 
 interface Thought {
   id: string;
@@ -15,9 +17,15 @@ interface Thought {
 const COLORS: BubbleColor[] = ["rose", "mint", "sky"];
 const MIN_SIZE = 60;
 const INITIAL_SIZE = 40;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 10;
 
 export function ThoughtCanvas() {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const colorIndexRef = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const growingRef = useRef<{
@@ -32,13 +40,56 @@ export function ThoughtCanvas() {
     return color;
   }, []);
 
+  // Convert screen coordinates to canvas coordinates
+  const screenToCanvas = useCallback(
+    (screenX: number, screenY: number) => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return { x: 0, y: 0 };
+      const x = (screenX - rect.left - pan.x) / zoom;
+      const y = (screenY - rect.top - pan.y) / zoom;
+      return { x, y };
+    },
+    [zoom, pan]
+  );
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // Mouse position relative to canvas element
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      // Calculate zoom
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * delta));
+
+      // Adjust pan to zoom toward mouse position
+      const scale = newZoom / zoom;
+      const newPanX = mouseX - (mouseX - pan.x) * scale;
+      const newPanY = mouseY - (mouseY - pan.y) * scale;
+
+      setZoom(newZoom);
+      setPan({ x: newPanX, y: newPanY });
+    },
+    [zoom, pan]
+  );
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      // Middle mouse button or space+left click for panning
+      if (e.button === 1) {
+        e.preventDefault();
+        setIsPanning(true);
+        panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+        return;
+      }
+
       if (e.target !== canvasRef.current || e.button !== 0) return;
 
-      const rect = canvasRef.current!.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const { x, y } = screenToCanvas(e.clientX, e.clientY);
 
       const newId = `thought-${Date.now()}`;
       const newThought: Thought = {
@@ -78,10 +129,25 @@ export function ThoughtCanvas() {
         lastTime,
       };
     },
-    [getNextColor]
+    [getNextColor, screenToCanvas]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (isPanning) {
+        const dx = e.clientX - panStartRef.current.x;
+        const dy = e.clientY - panStartRef.current.y;
+        setPan({
+          x: panStartRef.current.panX + dx,
+          y: panStartRef.current.panY + dy,
+        });
+      }
+    },
+    [isPanning]
   );
 
   const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
     if (growingRef.current) {
       cancelAnimationFrame(growingRef.current.animationId);
       const finishedId = growingRef.current.id;
@@ -126,6 +192,19 @@ export function ThoughtCanvas() {
     );
   }, []);
 
+  const handleZoomIn = useCallback(() => {
+    setZoom((z) => Math.min(MAX_ZOOM, z * 1.2));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom((z) => Math.max(MIN_ZOOM, z / 1.2));
+  }, []);
+
+  const handleResetView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
   // Global mouseup listener
   useEffect(() => {
     document.addEventListener("mouseup", handleMouseUp);
@@ -137,23 +216,51 @@ export function ThoughtCanvas() {
       ref={canvasRef}
       className="relative w-full h-screen overflow-hidden canvas-grid bg-canvas-bg cursor-crosshair"
       onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onWheel={handleWheel}
+      style={{ cursor: isPanning ? "grabbing" : "crosshair" }}
     >
-      {thoughts.map((thought) => (
-        <ThoughtBubble
-          key={thought.id}
-          {...thought}
-          readyToEdit={thought.readyToEdit}
-          onSizeChange={handleSizeChange}
-          onTextChange={handleTextChange}
-          onColorChange={handleColorChange}
-          onDelete={handleDelete}
-          onFinishNew={handleFinishNew}
-        />
-      ))}
+      {/* Zoomable/pannable layer */}
+      <div
+        className="absolute inset-0 origin-top-left"
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+        }}
+      >
+        {thoughts.map((thought) => (
+          <ThoughtBubble
+            key={thought.id}
+            {...thought}
+            readyToEdit={thought.readyToEdit}
+            onSizeChange={handleSizeChange}
+            onTextChange={handleTextChange}
+            onColorChange={handleColorChange}
+            onDelete={handleDelete}
+            onFinishNew={handleFinishNew}
+          />
+        ))}
+      </div>
+
+      {/* Zoom controls */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2">
+        <Button variant="outline" size="icon" onClick={handleZoomIn} title="Zoom in">
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" size="icon" onClick={handleZoomOut} title="Zoom out">
+          <ZoomOut className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" size="icon" onClick={handleResetView} title="Reset view">
+          <Maximize className="h-4 w-4" />
+        </Button>
+        <div className="text-xs text-muted-foreground text-center bg-background/80 rounded px-2 py-1">
+          {Math.round(zoom * 100)}%
+        </div>
+      </div>
 
       {/* Instructions overlay */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-sm bg-background/80 backdrop-blur-sm px-4 py-2 rounded-full border border-border">
-        Click & hold to create • Release to type • Click bubble to edit
+        Click & hold to create • Scroll to zoom • Middle-click to pan
       </div>
     </div>
   );
