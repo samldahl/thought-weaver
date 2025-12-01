@@ -10,12 +10,13 @@ interface ThoughtBubbleProps {
   y: number;
   size: number;
   text: string;
-  color: string; // Now a hex color
+  color: string;
   isNew?: boolean;
   readyToEdit?: boolean;
   zoom?: number;
   onSizeChange: (id: string, newSize: number) => void;
   onTextChange: (id: string, newText: string) => void;
+  onPositionChange: (id: string, x: number, y: number) => void;
   onDelete: (id: string) => void;
   onFinishNew: (id: string) => void;
 }
@@ -32,20 +33,23 @@ export function ThoughtBubble({
   zoom = 1,
   onSizeChange,
   onTextChange,
+  onPositionChange,
   onDelete,
   onFinishNew,
 }: ThoughtBubbleProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; bubbleX: number; bubbleY: number } | null>(null);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isNew) {
+    if (!isNew && !isDragging) {
       setPopoverOpen(true);
     }
-  }, [isNew]);
+  }, [isNew, isDragging]);
 
   const handleBlur = useCallback(() => {
     setIsEditing(false);
@@ -89,6 +93,50 @@ export function ThoughtBubble({
     onSizeChange(id, newSize);
   }, [id, size, onSizeChange]);
 
+  // Drag handling
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (isNew || isEditing || e.button !== 0) return;
+    
+    e.stopPropagation();
+    setIsDragging(true);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      bubbleX: x,
+      bubbleY: y,
+    };
+  }, [isNew, isEditing, x, y]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStartRef.current) return;
+      
+      const dx = (e.clientX - dragStartRef.current.mouseX) / zoom;
+      const dy = (e.clientY - dragStartRef.current.mouseY) / zoom;
+      
+      onPositionChange(
+        id,
+        dragStartRef.current.bubbleX + dx,
+        dragStartRef.current.bubbleY + dy
+      );
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      dragStartRef.current = null;
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging, id, zoom, onPositionChange]);
+
   // Start editing when readyToEdit becomes true for new bubbles
   useEffect(() => {
     if (isNew && readyToEdit && !isEditing) {
@@ -115,8 +163,11 @@ export function ThoughtBubble({
         <div
           className={cn(
             "thought-bubble",
-            !isNew && "cursor-pointer",
-            "focus:outline-none focus:ring-2 focus:ring-primary/50"
+            !isNew && !isDragging && "cursor-grab",
+            isDragging && "cursor-grabbing",
+            "focus:outline-none focus:ring-2 focus:ring-primary/50",
+            "transition-shadow duration-150",
+            isDragging && "shadow-lg"
           )}
           style={{
             width: size,
@@ -128,6 +179,7 @@ export function ThoughtBubble({
             borderColor: `${color}60`,
           }}
           tabIndex={0}
+          onMouseDown={handleMouseDown}
           onDoubleClick={handleDoubleClick}
           onKeyDown={handleKeyDown}
         >
@@ -139,7 +191,7 @@ export function ThoughtBubble({
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               placeholder="Enter your thought..."
-              className="w-full h-full bg-transparent text-center resize-none outline-none text-foreground placeholder:text-foreground/40"
+              className="w-full h-full bg-transparent text-center resize-none outline-none text-foreground placeholder:text-foreground/40 cursor-text"
               style={{ fontSize: `${fontSize}px` }}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
