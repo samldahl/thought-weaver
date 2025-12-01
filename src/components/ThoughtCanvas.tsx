@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ThoughtBubble } from "./ThoughtBubble";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Trash2 } from "lucide-react";
 
 interface Thought {
   id: string;
@@ -32,12 +32,22 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
 const INITIAL_ZOOM = 0.5;
 
+const STORAGE_KEY = "thought-canvas-data";
+
+interface SavedData {
+  thoughts: Thought[];
+  zoom: number;
+  pan: { x: number; y: number };
+  usedColors: string[];
+}
+
 export function ThoughtCanvas() {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [usedColors, setUsedColors] = useState<Set<string>>(new Set());
+  const [isLoaded, setIsLoaded] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
   const creatingRef = useRef<{
@@ -45,6 +55,35 @@ export function ThoughtCanvas() {
     originX: number;
     originY: number;
   } | null>(null);
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data: SavedData = JSON.parse(saved);
+        setThoughts(data.thoughts || []);
+        setZoom(data.zoom || INITIAL_ZOOM);
+        setPan(data.pan || { x: 0, y: 0 });
+        setUsedColors(new Set(data.usedColors || []));
+      }
+    } catch (e) {
+      console.error("Failed to load saved data:", e);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // Save to localStorage whenever state changes (after initial load)
+  useEffect(() => {
+    if (!isLoaded) return;
+    const data: SavedData = {
+      thoughts,
+      zoom,
+      pan,
+      usedColors: Array.from(usedColors),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }, [thoughts, zoom, pan, usedColors, isLoaded]);
 
   const getNextColor = useCallback((): string => {
     // Find first unused color
@@ -265,6 +304,15 @@ export function ThoughtCanvas() {
     setPan({ x: 0, y: 0 });
   }, []);
 
+  const handleClearCanvas = useCallback(() => {
+    if (window.confirm("Clear all thoughts? This cannot be undone.")) {
+      setThoughts([]);
+      setUsedColors(new Set());
+      setZoom(INITIAL_ZOOM);
+      setPan({ x: 0, y: 0 });
+    }
+  }, []);
+
   // Global mouseup listener
   useEffect(() => {
     document.addEventListener("mouseup", handleMouseUp);
@@ -317,6 +365,9 @@ export function ThoughtCanvas() {
         <div className="text-xs text-muted-foreground text-center bg-background/80 rounded px-2 py-1">
           {Math.round(zoom * 100)}%
         </div>
+        <Button variant="outline" size="icon" onClick={handleClearCanvas} title="Clear canvas" className="mt-2">
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Instructions overlay */}
