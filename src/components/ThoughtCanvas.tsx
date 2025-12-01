@@ -9,6 +9,7 @@ interface Thought {
   text: string;
   color: BubbleColor;
   isNew?: boolean;
+  readyToEdit?: boolean;
 }
 
 const COLORS: BubbleColor[] = ["rose", "mint", "sky"];
@@ -48,6 +49,7 @@ export function ThoughtCanvas() {
         text: "",
         color: getNextColor(),
         isNew: true,
+        readyToEdit: false,
       };
 
       setThoughts((prev) => [...prev, newThought]);
@@ -85,11 +87,11 @@ export function ThoughtCanvas() {
       const finishedId = growingRef.current.id;
       growingRef.current = null;
 
-      // Ensure minimum size
+      // Ensure minimum size and trigger editing
       setThoughts((prev) =>
         prev.map((t) =>
-          t.id === finishedId && t.size < MIN_SIZE
-            ? { ...t, size: MIN_SIZE }
+          t.id === finishedId
+            ? { ...t, size: Math.max(MIN_SIZE, t.size), readyToEdit: true }
             : t
         )
       );
@@ -140,6 +142,7 @@ export function ThoughtCanvas() {
         <ThoughtBubble
           key={thought.id}
           {...thought}
+          readyToEdit={thought.readyToEdit}
           onSizeChange={handleSizeChange}
           onTextChange={handleTextChange}
           onColorChange={handleColorChange}

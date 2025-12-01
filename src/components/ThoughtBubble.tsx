@@ -14,6 +14,7 @@ interface ThoughtBubbleProps {
   text: string;
   color: BubbleColor;
   isNew?: boolean;
+  readyToEdit?: boolean;
   onSizeChange: (id: string, newSize: number) => void;
   onTextChange: (id: string, newText: string) => void;
   onColorChange: (id: string, newColor: BubbleColor) => void;
@@ -35,13 +36,14 @@ export function ThoughtBubble({
   text,
   color,
   isNew,
+  readyToEdit,
   onSizeChange,
   onTextChange,
   onColorChange,
   onDelete,
   onFinishNew,
 }: ThoughtBubbleProps) {
-  const [isEditing, setIsEditing] = useState(isNew);
+  const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(text);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -94,6 +96,13 @@ export function ThoughtBubble({
     const newSize = Math.max(80, size + delta);
     onSizeChange(id, newSize);
   }, [id, size, onSizeChange]);
+
+  // Start editing when readyToEdit becomes true for new bubbles
+  useEffect(() => {
+    if (isNew && readyToEdit && !isEditing) {
+      setIsEditing(true);
+    }
+  }, [isNew, readyToEdit, isEditing]);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
