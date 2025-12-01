@@ -67,6 +67,13 @@ export function ThoughtBubble({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // Allow Ctrl/Cmd + Delete to delete bubble even while editing
+      if ((e.key === "Delete" || e.key === "Backspace") && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        onDelete(id);
+        return;
+      }
+      
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         handleBlur();
