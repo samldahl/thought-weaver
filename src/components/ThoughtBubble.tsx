@@ -58,6 +58,10 @@ export function ThoughtBubble({
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+  }, []);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!isNew) {
       setPopoverOpen(true);
     }
@@ -85,8 +89,14 @@ export function ThoughtBubble({
           onFinishNew(id);
         }
       }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (!isEditing) {
+          e.preventDefault();
+          onDelete(id);
+        }
+      }
     },
-    [handleBlur, text, isNew, id, onFinishNew]
+    [handleBlur, text, isNew, id, onFinishNew, isEditing, onDelete]
   );
 
   const handleEditText = useCallback(() => {
@@ -126,7 +136,8 @@ export function ThoughtBubble({
           className={cn(
             "thought-bubble",
             colorClass,
-            !isNew && "cursor-pointer"
+            !isNew && "cursor-pointer",
+            "focus:outline-none focus:ring-2 focus:ring-primary/50"
           )}
           style={{
             width: size,
@@ -135,7 +146,10 @@ export function ThoughtBubble({
             top: y - size / 2,
             fontSize: `${fontSize}px`,
           }}
+          tabIndex={0}
           onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+          onKeyDown={handleKeyDown}
         >
           {isEditing ? (
             <textarea
