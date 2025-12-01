@@ -62,6 +62,7 @@ export function ThoughtCanvas() {
   const [isLoaded, setIsLoaded] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const transformLayerRef = useRef<HTMLDivElement>(null);
   const creatingRef = useRef<{
     id: string;
     originX: number;
@@ -295,7 +296,9 @@ export function ThoughtCanvas() {
         return;
       }
 
-      if (e.target !== canvasRef.current || e.button !== 0) return;
+      // Only create bubble if clicking on canvas or transform layer (not on existing bubbles)
+      const isCanvasClick = e.target === canvasRef.current || e.target === transformLayerRef.current;
+      if (!isCanvasClick || e.button !== 0) return;
 
       const { x, y } = screenToCanvas(e.clientX, e.clientY);
 
@@ -453,6 +456,7 @@ export function ThoughtCanvas() {
 
       {/* Zoomable/pannable layer */}
       <div
+        ref={transformLayerRef}
         className="absolute inset-0 origin-top-left"
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
