@@ -20,6 +20,7 @@ interface Thought {
   color: string;
   isNew?: boolean;
   readyToEdit?: boolean;
+  parentId?: string;
 }
 
 // 40 unique, visually distinct colors
@@ -303,11 +304,47 @@ export function ThoughtCanvas() {
         return;
       }
 
+      const { x, y } = screenToCanvas(e.clientX, e.clientY);
+
+      // Check if Command/Ctrl is held to create nested bubble
+      if ((e.metaKey || e.ctrlKey) && e.button === 0) {
+        // Find if clicking inside an existing bubble
+        const clickedBubble = thoughts.find(t => {
+          const dx = x - t.x;
+          const dy = y - t.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          return distance <= t.size / 2;
+        });
+
+        if (clickedBubble) {
+          e.stopPropagation();
+          const newId = `thought-${Date.now()}`;
+          const newThought: Thought = {
+            id: newId,
+            x,
+            y,
+            size: INITIAL_SIZE,
+            text: "",
+            color: getNextColor(),
+            isNew: true,
+            readyToEdit: false,
+            parentId: clickedBubble.id,
+          };
+
+          setThoughts((prev) => [...prev, newThought]);
+
+          creatingRef.current = {
+            id: newId,
+            originX: e.clientX,
+            originY: e.clientY,
+          };
+          return;
+        }
+      }
+
       // Only create bubble if clicking on canvas or transform layer (not on existing bubbles)
       const isCanvasClick = e.target === canvasRef.current || e.target === transformLayerRef.current;
       if (!isCanvasClick || e.button !== 0) return;
-
-      const { x, y } = screenToCanvas(e.clientX, e.clientY);
 
       const newId = `thought-${Date.now()}`;
       const newThought: Thought = {
@@ -330,7 +367,7 @@ export function ThoughtCanvas() {
         originY: e.clientY,
       };
     },
-    [getNextColor, screenToCanvas, pan, spaceHeld]
+    [getNextColor, screenToCanvas, pan, spaceHeld, thoughts]
   );
 
   const handleMouseMove = useCallback(
@@ -392,18 +429,52 @@ export function ThoughtCanvas() {
   }, []);
 
   const handlePositionChange = useCallback((id: string, newX: number, newY: number) => {
-    setThoughts((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, x: newX, y: newY } : t))
-    );
+    setThoughts((prev) => {
+      // Find the bubble being moved
+      const movedBubble = prev.find(t => t.id === id);
+      if (!movedBubble) return prev;
+
+      const deltaX = newX - movedBubble.x;
+      const deltaY = newY - movedBubble.y;
+
+      // Update the bubble and all its children recursively
+      return prev.map((t) => {
+        if (t.id === id) {
+          return { ...t, x: newX, y: newY };
+        }
+        // Move children with their parent
+        if (t.parentId === id) {
+          return { ...t, x: t.x + deltaX, y: t.y + deltaY };
+        }
+        return t;
+      });
+    });
   }, []);
 
   const handleDelete = useCallback((id: string) => {
-    const thought = thoughts.find(t => t.id === id);
-    if (thought) {
-      freeColor(thought.color);
-    }
-    setThoughts((prev) => prev.filter((t) => t.id !== id));
-  }, [thoughts, freeColor]);
+    setThoughts((prev) => {
+      // Find all bubbles to delete (the bubble and all its children)
+      const toDelete = new Set<string>([id]);
+      const findChildren = (parentId: string) => {
+        prev.forEach(t => {
+          if (t.parentId === parentId) {
+            toDelete.add(t.id);
+            findChildren(t.id);
+          }
+        });
+      };
+      findChildren(id);
+
+      // Free colors of all deleted bubbles
+      prev.forEach(t => {
+        if (toDelete.has(t.id)) {
+          freeColor(t.color);
+        }
+      });
+
+      return prev.filter((t) => !toDelete.has(t.id));
+    });
+  }, [freeColor]);
 
   const handleFinishNew = useCallback((id: string) => {
     setThoughts((prev) =>
@@ -692,7 +763,7 @@ export function ThoughtCanvas() {
 
       {/* Instructions overlay */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-sm bg-background/80 backdrop-blur-sm px-4 py-2 rounded-full border border-border">
-        Click & drag to create • Drag bubbles to move • Two-finger/Space+drag to pan • Pinch to zoom
+        Click & drag to create • Cmd+Click inside bubble for nested • Drag to move • Space+drag to pan
       </div>
     </div>
   );
