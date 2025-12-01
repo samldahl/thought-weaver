@@ -1,8 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ThoughtBubble } from "./ThoughtBubble";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Trash2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Trash2, Download } from "lucide-react";
 import { DocumentPicker, Document } from "./DocumentPicker";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 interface Thought {
   id: string;
@@ -426,6 +433,178 @@ export function ThoughtCanvas() {
     }
   }, []);
 
+  const handleExportPNG = useCallback(() => {
+    if (thoughts.length === 0) {
+      toast.error("Nothing to export");
+      return;
+    }
+
+    // Calculate bounds of all bubbles
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    thoughts.forEach(t => {
+      const halfSize = t.size / 2;
+      minX = Math.min(minX, t.x - halfSize);
+      minY = Math.min(minY, t.y - halfSize);
+      maxX = Math.max(maxX, t.x + halfSize);
+      maxY = Math.max(maxY, t.y + halfSize);
+    });
+
+    const padding = 40;
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+
+    // Create canvas
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Fill background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw each bubble
+    thoughts.forEach(t => {
+      const x = t.x - minX + padding;
+      const y = t.y - minY + padding;
+      const radius = t.size / 2;
+
+      ctx.save();
+      ctx.translate(x, y);
+
+      // Draw circle with color
+      ctx.fillStyle = `${t.color}40`;
+      ctx.strokeStyle = `${t.color}60`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw text
+      const fontSize = Math.max(10, Math.min(16, t.size / 12));
+      ctx.fillStyle = "#000000";
+      ctx.font = `${fontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      
+      // Wrap text
+      const words = t.text.split(" ");
+      const lines: string[] = [];
+      let currentLine = "";
+      words.forEach(word => {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > t.size * 0.8) {
+          if (currentLine) lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      });
+      if (currentLine) lines.push(currentLine);
+
+      const lineHeight = fontSize * 1.2;
+      const totalHeight = lines.length * lineHeight;
+      lines.forEach((line, i) => {
+        const yPos = -totalHeight / 2 + i * lineHeight + lineHeight / 2;
+        ctx.fillText(line, 0, yPos);
+      });
+
+      ctx.restore();
+    });
+
+    // Download
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const currentDoc = documents.find(d => d.id === currentDocId);
+      a.download = `${currentDoc?.name || "thought-canvas"}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Exported as PNG");
+    });
+  }, [thoughts, documents, currentDocId]);
+
+  const handleExportSVG = useCallback(() => {
+    if (thoughts.length === 0) {
+      toast.error("Nothing to export");
+      return;
+    }
+
+    // Calculate bounds
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    thoughts.forEach(t => {
+      const halfSize = t.size / 2;
+      minX = Math.min(minX, t.x - halfSize);
+      minY = Math.min(minY, t.y - halfSize);
+      maxX = Math.max(maxX, t.x + halfSize);
+      maxY = Math.max(maxY, t.y + halfSize);
+    });
+
+    const padding = 40;
+    const width = maxX - minX + padding * 2;
+    const height = maxY - minY + padding * 2;
+
+    // Create SVG
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+    svg += `<rect width="${width}" height="${height}" fill="#ffffff"/>`;
+
+    thoughts.forEach(t => {
+      const x = t.x - minX + padding;
+      const y = t.y - minY + padding;
+      const radius = t.size / 2;
+      const fontSize = Math.max(10, Math.min(16, t.size / 12));
+
+      // Draw circle
+      svg += `<circle cx="${x}" cy="${y}" r="${radius}" fill="${t.color}40" stroke="${t.color}60" stroke-width="2"/>`;
+
+      // Draw text
+      const words = t.text.split(" ");
+      const lines: string[] = [];
+      let currentLine = "";
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.font = `${fontSize}px system-ui, -apple-system, sans-serif`;
+        words.forEach(word => {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const metrics = ctx.measureText(testLine);
+          if (metrics.width > t.size * 0.8) {
+            if (currentLine) lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        });
+        if (currentLine) lines.push(currentLine);
+      }
+
+      const lineHeight = fontSize * 1.2;
+      const totalHeight = lines.length * lineHeight;
+      lines.forEach((line, i) => {
+        const yPos = y - totalHeight / 2 + i * lineHeight + lineHeight / 2;
+        svg += `<text x="${x}" y="${yPos}" font-size="${fontSize}" font-family="system-ui, -apple-system, sans-serif" text-anchor="middle" dominant-baseline="middle" fill="#000000">${line}</text>`;
+      });
+    });
+
+    svg += `</svg>`;
+
+    // Download
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const currentDoc = documents.find(d => d.id === currentDocId);
+    a.download = `${currentDoc?.name || "thought-canvas"}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Exported as SVG");
+  }, [thoughts, documents, currentDocId]);
+
   // Global mouseup listener
   useEffect(() => {
     document.addEventListener("mouseup", handleMouseUp);
@@ -491,7 +670,22 @@ export function ThoughtCanvas() {
         <div className="text-xs text-muted-foreground text-center bg-background/80 rounded px-2 py-1">
           {Math.round(zoom * 100)}%
         </div>
-        <Button variant="outline" size="icon" onClick={handleClearCanvas} title="Clear canvas" className="mt-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" title="Export canvas" className="mt-2">
+              <Download className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleExportPNG}>
+              Export as PNG
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportSVG}>
+              Export as SVG
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button variant="outline" size="icon" onClick={handleClearCanvas} title="Clear canvas">
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
