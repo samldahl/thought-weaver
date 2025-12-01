@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { ThoughtBubble, BubbleColor } from "./ThoughtBubble";
+import { ThoughtBubble } from "./ThoughtBubble";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 
@@ -9,12 +9,23 @@ interface Thought {
   y: number;
   size: number;
   text: string;
-  color: BubbleColor;
+  color: string;
   isNew?: boolean;
   readyToEdit?: boolean;
 }
 
-const COLORS: BubbleColor[] = ["rose", "mint", "sky"];
+// 40 unique, visually distinct colors
+const UNIQUE_COLORS: string[] = [
+  "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7",
+  "#DDA0DD", "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E9",
+  "#F8B500", "#00CED1", "#FF69B4", "#32CD32", "#FFD700",
+  "#FF7F50", "#6495ED", "#DC143C", "#00FA9A", "#FF1493",
+  "#1E90FF", "#FF4500", "#2E8B57", "#9370DB", "#20B2AA",
+  "#FF6347", "#4169E1", "#8B4513", "#00BFFF", "#228B22",
+  "#DA70D6", "#CD853F", "#40E0D0", "#C71585", "#7B68EE",
+  "#3CB371", "#DB7093", "#008B8B", "#B8860B", "#9932CC"
+];
+
 const MIN_SIZE = 60;
 const INITIAL_SIZE = 40;
 const MIN_ZOOM = 0.1;
@@ -26,8 +37,8 @@ export function ThoughtCanvas() {
   const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [usedColors, setUsedColors] = useState<Set<string>>(new Set());
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
-  const colorIndexRef = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
   const creatingRef = useRef<{
     id: string;
@@ -35,10 +46,26 @@ export function ThoughtCanvas() {
     originY: number;
   } | null>(null);
 
-  const getNextColor = useCallback((): BubbleColor => {
-    const color = COLORS[colorIndexRef.current];
-    colorIndexRef.current = (colorIndexRef.current + 1) % COLORS.length;
-    return color;
+  const getNextColor = useCallback((): string => {
+    // Find first unused color
+    const availableColor = UNIQUE_COLORS.find(c => !usedColors.has(c));
+    if (availableColor) {
+      setUsedColors(prev => new Set([...prev, availableColor]));
+      return availableColor;
+    }
+    // If all 40 used, generate a random one
+    const randomColor = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
+    setUsedColors(prev => new Set([...prev, randomColor]));
+    return randomColor;
+  }, [usedColors]);
+
+  // When a thought is deleted, free its color
+  const freeColor = useCallback((color: string) => {
+    setUsedColors(prev => {
+      const next = new Set(prev);
+      next.delete(color);
+      return next;
+    });
   }, []);
 
   // Convert screen coordinates to canvas coordinates
@@ -174,15 +201,13 @@ export function ThoughtCanvas() {
     );
   }, []);
 
-  const handleColorChange = useCallback((id: string, newColor: BubbleColor) => {
-    setThoughts((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, color: newColor } : t))
-    );
-  }, []);
-
   const handleDelete = useCallback((id: string) => {
+    const thought = thoughts.find(t => t.id === id);
+    if (thought) {
+      freeColor(thought.color);
+    }
     setThoughts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  }, [thoughts, freeColor]);
 
   const handleFinishNew = useCallback((id: string) => {
     setThoughts((prev) =>
@@ -234,7 +259,6 @@ export function ThoughtCanvas() {
             zoom={zoom}
             onSizeChange={handleSizeChange}
             onTextChange={handleTextChange}
-            onColorChange={handleColorChange}
             onDelete={handleDelete}
             onFinishNew={handleFinishNew}
           />
