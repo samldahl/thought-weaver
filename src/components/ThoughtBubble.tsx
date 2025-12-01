@@ -60,6 +60,11 @@ export function ThoughtBubble({
     }
   }, [id, editText, onTextChange, isNew, onFinishNew]);
 
+  const handleSizeAdjust = useCallback((delta: number) => {
+    const newSize = Math.max(80, size + delta);
+    onSizeChange(id, newSize);
+  }, [id, size, onSizeChange]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -79,19 +84,30 @@ export function ThoughtBubble({
           onDelete(id);
         }
       }
+      // Size adjustment shortcuts
+      if (!isEditing) {
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          handleSizeAdjust(30);
+        }
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          handleSizeAdjust(-30);
+        }
+        // Edit mode shortcut
+        if (e.key === "e" || e.key === "E") {
+          e.preventDefault();
+          setIsEditing(true);
+        }
+      }
     },
-    [handleBlur, text, isNew, id, onFinishNew, isEditing, onDelete]
+    [handleBlur, text, isNew, id, onFinishNew, isEditing, onDelete, handleSizeAdjust]
   );
 
   const handleEditText = useCallback(() => {
     setPopoverOpen(false);
     setIsEditing(true);
   }, []);
-
-  const handleSizeAdjust = useCallback((delta: number) => {
-    const newSize = Math.max(80, size + delta);
-    onSizeChange(id, newSize);
-  }, [id, size, onSizeChange]);
 
   // Drag handling
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -245,7 +261,10 @@ export function ThoughtBubble({
               variant="destructive"
               size="icon"
               className="h-8 w-8"
-              onClick={() => onDelete(id)}
+              onClick={() => {
+                setPopoverOpen(false);
+                onDelete(id);
+              }}
             >
               <Trash2 className="h-3 w-3" />
             </Button>
