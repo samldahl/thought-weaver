@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { ThoughtBubble } from "./ThoughtBubble";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut, Maximize, Trash2 } from "lucide-react";
+import { DocumentPicker, Document } from "./DocumentPicker";
 
 interface Thought {
   id: string;
@@ -32,16 +33,27 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
 const INITIAL_ZOOM = 0.5;
 
-const STORAGE_KEY = "thought-canvas-data";
+const DOCUMENTS_KEY = "thought-canvas-documents";
+const CURRENT_DOC_KEY = "thought-canvas-current-doc";
 
-interface SavedData {
+interface DocumentData {
   thoughts: Thought[];
   zoom: number;
   pan: { x: number; y: number };
   usedColors: string[];
 }
 
+function generateDocId() {
+  return `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function getStorageKey(docId: string) {
+  return `thought-canvas-doc-${docId}`;
+}
+
 export function ThoughtCanvas() {
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [currentDocId, setCurrentDocId] = useState<string>("");
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -56,12 +68,38 @@ export function ThoughtCanvas() {
     originY: number;
   } | null>(null);
 
-  // Load from localStorage on mount
+  // Load documents list and current document on mount
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const data: SavedData = JSON.parse(saved);
+      const savedDocs = localStorage.getItem(DOCUMENTS_KEY);
+      const savedCurrentId = localStorage.getItem(CURRENT_DOC_KEY);
+      
+      let docs: Document[] = savedDocs ? JSON.parse(savedDocs) : [];
+      let docId = savedCurrentId || "";
+      
+      // If no documents exist, create the first one
+      if (docs.length === 0) {
+        const newDoc: Document = {
+          id: generateDocId(),
+          name: "Untitled",
+          createdAt: Date.now(),
+        };
+        docs = [newDoc];
+        docId = newDoc.id;
+        localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(docs));
+        localStorage.setItem(CURRENT_DOC_KEY, docId);
+      } else if (!docId || !docs.find(d => d.id === docId)) {
+        docId = docs[0].id;
+        localStorage.setItem(CURRENT_DOC_KEY, docId);
+      }
+      
+      setDocuments(docs);
+      setCurrentDocId(docId);
+      
+      // Load the current document's data
+      const docData = localStorage.getItem(getStorageKey(docId));
+      if (docData) {
+        const data: DocumentData = JSON.parse(docData);
         setThoughts(data.thoughts || []);
         setZoom(data.zoom || INITIAL_ZOOM);
         setPan(data.pan || { x: 0, y: 0 });
@@ -73,17 +111,89 @@ export function ThoughtCanvas() {
     setIsLoaded(true);
   }, []);
 
-  // Save to localStorage whenever state changes (after initial load)
+  // Save current document data whenever state changes
   useEffect(() => {
-    if (!isLoaded) return;
-    const data: SavedData = {
+    if (!isLoaded || !currentDocId) return;
+    const data: DocumentData = {
       thoughts,
       zoom,
       pan,
       usedColors: Array.from(usedColors),
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [thoughts, zoom, pan, usedColors, isLoaded]);
+    localStorage.setItem(getStorageKey(currentDocId), JSON.stringify(data));
+  }, [thoughts, zoom, pan, usedColors, isLoaded, currentDocId]);
+
+  // Save documents list when it changes
+  useEffect(() => {
+    if (!isLoaded) return;
+    localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(documents));
+  }, [documents, isLoaded]);
+
+  const handleNewDocument = useCallback(() => {
+    const newDoc: Document = {
+      id: generateDocId(),
+      name: `Document ${documents.length + 1}`,
+      createdAt: Date.now(),
+    };
+    setDocuments(prev => [...prev, newDoc]);
+    setCurrentDocId(newDoc.id);
+    localStorage.setItem(CURRENT_DOC_KEY, newDoc.id);
+    
+    // Reset canvas state for new document
+    setThoughts([]);
+    setZoom(INITIAL_ZOOM);
+    setPan({ x: 0, y: 0 });
+    setUsedColors(new Set());
+  }, [documents.length]);
+
+  const handleSelectDocument = useCallback((docId: string) => {
+    if (docId === currentDocId) return;
+    
+    setCurrentDocId(docId);
+    localStorage.setItem(CURRENT_DOC_KEY, docId);
+    
+    // Load the selected document's data
+    try {
+      const docData = localStorage.getItem(getStorageKey(docId));
+      if (docData) {
+        const data: DocumentData = JSON.parse(docData);
+        setThoughts(data.thoughts || []);
+        setZoom(data.zoom || INITIAL_ZOOM);
+        setPan(data.pan || { x: 0, y: 0 });
+        setUsedColors(new Set(data.usedColors || []));
+      } else {
+        setThoughts([]);
+        setZoom(INITIAL_ZOOM);
+        setPan({ x: 0, y: 0 });
+        setUsedColors(new Set());
+      }
+    } catch (e) {
+      console.error("Failed to load document:", e);
+    }
+  }, [currentDocId]);
+
+  const handleDeleteDocument = useCallback((docId: string) => {
+    if (documents.length <= 1) return;
+    if (!window.confirm("Delete this document? This cannot be undone.")) return;
+    
+    // Remove document data from storage
+    localStorage.removeItem(getStorageKey(docId));
+    
+    const newDocs = documents.filter(d => d.id !== docId);
+    setDocuments(newDocs);
+    
+    // If deleting current document, switch to another
+    if (docId === currentDocId) {
+      const newCurrentId = newDocs[0].id;
+      handleSelectDocument(newCurrentId);
+    }
+  }, [documents, currentDocId, handleSelectDocument]);
+
+  const handleRenameDocument = useCallback((docId: string, newName: string) => {
+    setDocuments(prev => prev.map(d => 
+      d.id === docId ? { ...d, name: newName } : d
+    ));
+  }, []);
 
   const getNextColor = useCallback((): string => {
     // Find first unused color
@@ -329,6 +439,18 @@ export function ThoughtCanvas() {
       onWheel={handleWheel}
       style={{ cursor: isPanning ? "grabbing" : spaceHeld ? "grab" : "crosshair" }}
     >
+      {/* Document picker */}
+      <div className="absolute top-4 left-4 z-10">
+        <DocumentPicker
+          documents={documents}
+          currentDocId={currentDocId}
+          onNewDocument={handleNewDocument}
+          onSelectDocument={handleSelectDocument}
+          onDeleteDocument={handleDeleteDocument}
+          onRenameDocument={handleRenameDocument}
+        />
+      </div>
+
       {/* Zoomable/pannable layer */}
       <div
         className="absolute inset-0 origin-top-left"
