@@ -80,35 +80,64 @@ export function ThoughtCanvas() {
     [zoom, pan]
   );
 
+  const [spaceHeld, setSpaceHeld] = useState(false);
+
+  // Handle spacebar for pan mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setSpaceHeld(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault();
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      // Mouse position relative to canvas element
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+      // Pinch zoom (ctrlKey) or scroll wheel zoom
+      if (e.ctrlKey || e.metaKey) {
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
 
-      // Calculate zoom
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * delta));
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * delta));
 
-      // Adjust pan to zoom toward mouse position
-      const scale = newZoom / zoom;
-      const newPanX = mouseX - (mouseX - pan.x) * scale;
-      const newPanY = mouseY - (mouseY - pan.y) * scale;
+        const scale = newZoom / zoom;
+        const newPanX = mouseX - (mouseX - pan.x) * scale;
+        const newPanY = mouseY - (mouseY - pan.y) * scale;
 
-      setZoom(newZoom);
-      setPan({ x: newPanX, y: newPanY });
+        setZoom(newZoom);
+        setPan({ x: newPanX, y: newPanY });
+      } else {
+        // Two-finger pan (no modifier)
+        setPan((prev) => ({
+          x: prev.x - e.deltaX,
+          y: prev.y - e.deltaY,
+        }));
+      }
     },
     [zoom, pan]
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Middle mouse button for panning
-      if (e.button === 1) {
+      // Middle mouse button or spacebar held for panning
+      if (e.button === 1 || (e.button === 0 && spaceHeld)) {
         e.preventDefault();
         setIsPanning(true);
         panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
@@ -140,7 +169,7 @@ export function ThoughtCanvas() {
         originY: e.clientY,
       };
     },
-    [getNextColor, screenToCanvas, pan]
+    [getNextColor, screenToCanvas, pan, spaceHeld]
   );
 
   const handleMouseMove = useCallback(
@@ -243,12 +272,12 @@ export function ThoughtCanvas() {
   return (
     <div
       ref={canvasRef}
-      className="relative w-full h-screen overflow-hidden canvas-grid bg-canvas-bg cursor-crosshair"
+      className="relative w-full h-screen overflow-hidden canvas-grid bg-canvas-bg"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onWheel={handleWheel}
-      style={{ cursor: isPanning ? "grabbing" : "crosshair" }}
+      style={{ cursor: isPanning ? "grabbing" : spaceHeld ? "grab" : "crosshair" }}
     >
       {/* Zoomable/pannable layer */}
       <div
@@ -290,7 +319,7 @@ export function ThoughtCanvas() {
 
       {/* Instructions overlay */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-sm bg-background/80 backdrop-blur-sm px-4 py-2 rounded-full border border-border">
-        Click & drag to create • Drag bubbles to move • Double-click to edit • Delete key to remove • Scroll to zoom
+        Click & drag to create • Drag bubbles to move • Two-finger/Space+drag to pan • Pinch to zoom
       </div>
     </div>
   );
