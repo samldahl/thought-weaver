@@ -19,11 +19,11 @@ const MIN_SIZE = 60;
 const INITIAL_SIZE = 40;
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
-const MAX_SIZE_VH = 0.5; // 50% of viewport height
+const INITIAL_ZOOM = 0.5;
 
 export function ThoughtCanvas() {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
@@ -127,14 +127,13 @@ export function ThoughtCanvas() {
         });
       }
 
-      // Drag-to-size: calculate distance from origin
+      // Drag-to-size: calculate distance from origin (no size limit)
       if (creatingRef.current) {
         const dx = e.clientX - creatingRef.current.originX;
         const dy = e.clientY - creatingRef.current.originY;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const maxSize = window.innerHeight * MAX_SIZE_VH;
         // Scale by zoom so the visual size matches the drag distance
-        const newSize = Math.min(Math.max(INITIAL_SIZE, distance * 2 / zoom), maxSize);
+        const newSize = Math.max(INITIAL_SIZE, distance * 2 / zoom);
 
         setThoughts((prev) =>
           prev.map((t) =>
@@ -200,7 +199,7 @@ export function ThoughtCanvas() {
   }, []);
 
   const handleResetView = useCallback(() => {
-    setZoom(1);
+    setZoom(INITIAL_ZOOM);
     setPan({ x: 0, y: 0 });
   }, []);
 
