@@ -82,10 +82,12 @@ export function ThoughtCanvas() {
 
   const [spaceHeld, setSpaceHeld] = useState(false);
 
-  // Handle spacebar for pan mode
+  // Handle spacebar for pan mode (only when not typing)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat) {
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+      if (e.code === "Space" && !e.repeat && !isTyping) {
         e.preventDefault();
         setSpaceHeld(true);
       }
