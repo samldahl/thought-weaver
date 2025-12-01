@@ -29,10 +29,10 @@ export function ThoughtCanvas() {
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const colorIndexRef = useRef(0);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const growingRef = useRef<{
+  const creatingRef = useRef<{
     id: string;
-    animationId: number;
-    lastTime: number;
+    originX: number;
+    originY: number;
   } | null>(null);
 
   const getNextColor = useCallback((): BubbleColor => {
@@ -80,7 +80,7 @@ export function ThoughtCanvas() {
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Middle mouse button or space+left click for panning
+      // Middle mouse button for panning
       if (e.button === 1) {
         e.preventDefault();
         setIsPanning(true);
@@ -106,40 +106,14 @@ export function ThoughtCanvas() {
 
       setThoughts((prev) => [...prev, newThought]);
 
-      // Start growing animation with easing
-      const lastTime = performance.now();
-      const maxSize = window.innerHeight * MAX_SIZE_VH;
-
-      const grow = (time: number) => {
-        if (!growingRef.current || growingRef.current.id !== newId) return;
-
-        const dt = time - growingRef.current.lastTime;
-        growingRef.current.lastTime = time;
-
-        setThoughts((prev) =>
-          prev.map((t) => {
-            if (t.id !== newId) return t;
-            
-            // Easing: growth rate slows as size approaches maxSize
-            // Using asymptotic curve: rate = baseRate * (1 - size/maxSize)^2
-            const progress = Math.min(t.size / maxSize, 0.95);
-            const easedRate = 0.4 * Math.pow(1 - progress, 2);
-            const newSize = Math.min(t.size + dt * easedRate, maxSize);
-            
-            return { ...t, size: newSize };
-          })
-        );
-
-        growingRef.current.animationId = requestAnimationFrame(grow);
-      };
-
-      growingRef.current = {
+      // Store origin for drag-to-size
+      creatingRef.current = {
         id: newId,
-        animationId: requestAnimationFrame(grow),
-        lastTime,
+        originX: e.clientX,
+        originY: e.clientY,
       };
     },
-    [getNextColor, screenToCanvas]
+    [getNextColor, screenToCanvas, pan]
   );
 
   const handleMouseMove = useCallback(
@@ -152,16 +126,31 @@ export function ThoughtCanvas() {
           y: panStartRef.current.panY + dy,
         });
       }
+
+      // Drag-to-size: calculate distance from origin
+      if (creatingRef.current) {
+        const dx = e.clientX - creatingRef.current.originX;
+        const dy = e.clientY - creatingRef.current.originY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const maxSize = window.innerHeight * MAX_SIZE_VH;
+        // Scale by zoom so the visual size matches the drag distance
+        const newSize = Math.min(Math.max(INITIAL_SIZE, distance * 2 / zoom), maxSize);
+
+        setThoughts((prev) =>
+          prev.map((t) =>
+            t.id === creatingRef.current?.id ? { ...t, size: newSize } : t
+          )
+        );
+      }
     },
-    [isPanning]
+    [isPanning, zoom]
   );
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
-    if (growingRef.current) {
-      cancelAnimationFrame(growingRef.current.animationId);
-      const finishedId = growingRef.current.id;
-      growingRef.current = null;
+    if (creatingRef.current) {
+      const finishedId = creatingRef.current.id;
+      creatingRef.current = null;
 
       // Ensure minimum size and trigger editing
       setThoughts((prev) =>
@@ -271,7 +260,7 @@ export function ThoughtCanvas() {
 
       {/* Instructions overlay */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-muted-foreground text-sm bg-background/80 backdrop-blur-sm px-4 py-2 rounded-full border border-border">
-        Click & hold to create • Scroll to zoom • Middle-click to pan
+        Click & drag to create • Scroll to zoom • Middle-click to pan
       </div>
     </div>
   );
