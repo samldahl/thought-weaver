@@ -57,6 +57,15 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        bubble: {
+          rose: "hsl(var(--bubble-rose))",
+          mint: "hsl(var(--bubble-mint))",
+          sky: "hsl(var(--bubble-sky))",
+        },
+        canvas: {
+          bg: "hsl(var(--canvas-bg))",
+          dot: "hsl(var(--canvas-dot))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +74,23 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "bubble-pop": {
+          "0%": { transform: "scale(0)", opacity: "0" },
+          "50%": { transform: "scale(1.1)" },
+          "100%": { transform: "scale(1)", opacity: "1" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "bubble-pop": "bubble-pop 0.3s ease-out forwards",
       },
     },
   },
