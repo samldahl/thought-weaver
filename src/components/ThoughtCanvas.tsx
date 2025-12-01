@@ -21,6 +21,7 @@ interface Thought {
   isNew?: boolean;
   readyToEdit?: boolean;
   parentId?: string;
+  notes?: string;
 }
 
 // 40 unique, visually distinct colors
@@ -428,6 +429,12 @@ export function ThoughtCanvas() {
     );
   }, []);
 
+  const handleNotesChange = useCallback((id: string, newNotes: string) => {
+    setThoughts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, notes: newNotes } : t))
+    );
+  }, []);
+
   const handlePositionChange = useCallback((id: string, newX: number, newY: number) => {
     setThoughts((prev) => {
       // Find the bubble being moved
@@ -720,6 +727,7 @@ export function ThoughtCanvas() {
             zoom={zoom}
             onSizeChange={handleSizeChange}
             onTextChange={handleTextChange}
+            onNotesChange={handleNotesChange}
             onPositionChange={handlePositionChange}
             onDelete={handleDelete}
             onFinishNew={handleFinishNew}
