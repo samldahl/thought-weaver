@@ -6,9 +6,7 @@ Your interactive canvas for connecting ideas, shaping projects, and weaving thou
 
 ## 🧵 About This Project
 
-**URL:** https://lovable.dev/projects/ed3eb9a1-0e50-4e38-a5fb-4658d27174dc
-
-Thought Weaver is built on a modern, fast, creative-friendly stack that lets you shape your ideas visually and intuitively. You can edit the project directly in Lovable or use your own tools locally — whichever you prefer.
+Thought Weaver is built on a modern, fast, creative-friendly stack that lets you shape your ideas visually and intuitively. 
 
 ---
 
