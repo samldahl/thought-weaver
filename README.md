@@ -24,6 +24,11 @@ cd <YOUR_PROJECT_NAME>
 # Step 3: Install dependencies
 npm i
 
+#S Step 4: Connect to your MongoDB Cluster
+URI=...
+
 # Step 4: Launch the dev server
 npm run dev
+
+
 
