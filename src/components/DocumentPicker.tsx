@@ -10,6 +10,7 @@ import {
 import { FileText, Plus, ChevronDown, Trash2 } from "lucide-react";
 
 export interface Document {
+  _id?: string;
   id: string;
   name: string;
   createdAt: number;
@@ -33,7 +34,7 @@ export function DocumentPicker({
 }: DocumentPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   
-  const currentDoc = documents.find(d => d.id === currentDocId);
+  const currentDoc = documents.find(d => (d._id || d.id) === currentDocId);
   const currentName = currentDoc?.name || "Untitled";
 
   return (
@@ -58,33 +59,36 @@ export function DocumentPicker({
             No documents yet
           </div>
         ) : (
-          documents.map((doc) => (
-            <DropdownMenuItem
-              key={doc.id}
-              className="flex items-center justify-between group"
-              onClick={() => onSelectDocument(doc.id)}
-            >
-              <div className="flex items-center gap-2 truncate">
-                <FileText className="h-4 w-4 shrink-0" />
-                <span className={`truncate ${doc.id === currentDocId ? "font-medium" : ""}`}>
-                  {doc.name}
-                </span>
-              </div>
-              {documents.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteDocument(doc.id);
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              )}
-            </DropdownMenuItem>
-          ))
+          documents.map((doc) => {
+            const docId = doc._id || doc.id;
+            return (
+              <DropdownMenuItem
+                key={docId}
+                className="flex items-center justify-between group"
+                onClick={() => onSelectDocument(docId)}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className={`truncate ${docId === currentDocId ? "font-medium" : ""}`}>
+                    {doc.name}
+                  </span>
+                </div>
+                {documents.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteDocument(docId);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                )}
+              </DropdownMenuItem>
+            );
+          })
         )}
       </DropdownMenuContent>
     </DropdownMenu>

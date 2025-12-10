@@ -8,7 +8,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "tsx watch server/src/index.ts",
+    "server:build": "tsc -p server/tsconfig.json",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -59,7 +62,14 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.9",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.3",
+    "bcryptjs": "^2.4.3",
+    "express-session": "^1.18.1",
+    "connect-mongo": "^5.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
@@ -78,6 +88,12 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express-session": "^1.18.0",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2"
   }
 }

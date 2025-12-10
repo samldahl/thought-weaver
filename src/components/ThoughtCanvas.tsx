@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { useDocuments } from "@/hooks/useDocuments";
 
 interface Thought {
   id: string;
@@ -42,33 +43,24 @@ const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
 const INITIAL_ZOOM = 0.5;
 
-const DOCUMENTS_KEY = "thought-canvas-documents";
-const CURRENT_DOC_KEY = "thought-canvas-current-doc";
-
-interface DocumentData {
-  thoughts: Thought[];
-  zoom: number;
-  pan: { x: number; y: number };
-  usedColors: string[];
-}
-
-function generateDocId() {
-  return `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
-
-function getStorageKey(docId: string) {
-  return `thought-canvas-doc-${docId}`;
-}
-
 export function ThoughtCanvas() {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [currentDocId, setCurrentDocId] = useState<string>("");
+  const {
+    documents,
+    currentDocument,
+    currentDocId,
+    isLoading,
+    isSaving,
+    createDocument,
+    updateDocument,
+    deleteDocument,
+    renameDocument,
+    selectDocument,
+  } = useDocuments();
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [zoom, setZoom] = useState(INITIAL_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [usedColors, setUsedColors] = useState<Set<string>>(new Set());
-  const [isLoaded, setIsLoaded] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
   const transformLayerRef = useRef<HTMLDivElement>(null);
@@ -78,132 +70,51 @@ export function ThoughtCanvas() {
     originY: number;
   } | null>(null);
 
-  // Load documents list and current document on mount
+  // Load current document data when it changes
   useEffect(() => {
-    try {
-      const savedDocs = localStorage.getItem(DOCUMENTS_KEY);
-      const savedCurrentId = localStorage.getItem(CURRENT_DOC_KEY);
-      
-      let docs: Document[] = savedDocs ? JSON.parse(savedDocs) : [];
-      let docId = savedCurrentId || "";
-      
-      // If no documents exist, create the first one
-      if (docs.length === 0) {
-        const newDoc: Document = {
-          id: generateDocId(),
-          name: "Untitled",
-          createdAt: Date.now(),
-        };
-        docs = [newDoc];
-        docId = newDoc.id;
-        localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(docs));
-        localStorage.setItem(CURRENT_DOC_KEY, docId);
-      } else if (!docId || !docs.find(d => d.id === docId)) {
-        docId = docs[0].id;
-        localStorage.setItem(CURRENT_DOC_KEY, docId);
-      }
-      
-      setDocuments(docs);
-      setCurrentDocId(docId);
-      
-      // Load the current document's data
-      const docData = localStorage.getItem(getStorageKey(docId));
-      if (docData) {
-        const data: DocumentData = JSON.parse(docData);
-        setThoughts(data.thoughts || []);
-        setZoom(data.zoom || INITIAL_ZOOM);
-        setPan(data.pan || { x: 0, y: 0 });
-        setUsedColors(new Set(data.usedColors || []));
-      }
-    } catch (e) {
-      console.error("Failed to load saved data:", e);
+    if (currentDocument) {
+      setThoughts(currentDocument.thoughts || []);
+      setZoom(currentDocument.zoom || INITIAL_ZOOM);
+      setPan(currentDocument.pan || { x: 0, y: 0 });
+      setUsedColors(new Set(currentDocument.usedColors || []));
     }
-    setIsLoaded(true);
-  }, []);
+  }, [currentDocument]);
 
-  // Save current document data whenever state changes
+  // Auto-save document changes to MongoDB
   useEffect(() => {
-    if (!isLoaded || !currentDocId) return;
-    const data: DocumentData = {
-      thoughts,
-      zoom,
-      pan,
-      usedColors: Array.from(usedColors),
-    };
-    localStorage.setItem(getStorageKey(currentDocId), JSON.stringify(data));
-  }, [thoughts, zoom, pan, usedColors, isLoaded, currentDocId]);
-
-  // Save documents list when it changes
-  useEffect(() => {
-    if (!isLoaded) return;
-    localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(documents));
-  }, [documents, isLoaded]);
-
-  const handleNewDocument = useCallback(() => {
-    const newDoc: Document = {
-      id: generateDocId(),
-      name: `Document ${documents.length + 1}`,
-      createdAt: Date.now(),
-    };
-    setDocuments(prev => [...prev, newDoc]);
-    setCurrentDocId(newDoc.id);
-    localStorage.setItem(CURRENT_DOC_KEY, newDoc.id);
+    if (!currentDocId || isLoading) return;
     
-    // Reset canvas state for new document
-    setThoughts([]);
-    setZoom(INITIAL_ZOOM);
-    setPan({ x: 0, y: 0 });
-    setUsedColors(new Set());
-  }, [documents.length]);
+    const timeoutId = setTimeout(() => {
+      updateDocument(currentDocId, {
+        thoughts,
+        zoom,
+        pan,
+        usedColors: Array.from(usedColors),
+      });
+    }, 1000); // Debounce saves by 1 second
+
+    return () => clearTimeout(timeoutId);
+  }, [thoughts, zoom, pan, usedColors, currentDocId, isLoading]);
+
+  const handleNewDocument = useCallback(async () => {
+    await createDocument(`Document ${documents.length + 1}`);
+  }, [createDocument, documents.length]);
 
   const handleSelectDocument = useCallback((docId: string) => {
     if (docId === currentDocId) return;
-    
-    setCurrentDocId(docId);
-    localStorage.setItem(CURRENT_DOC_KEY, docId);
-    
-    // Load the selected document's data
-    try {
-      const docData = localStorage.getItem(getStorageKey(docId));
-      if (docData) {
-        const data: DocumentData = JSON.parse(docData);
-        setThoughts(data.thoughts || []);
-        setZoom(data.zoom || INITIAL_ZOOM);
-        setPan(data.pan || { x: 0, y: 0 });
-        setUsedColors(new Set(data.usedColors || []));
-      } else {
-        setThoughts([]);
-        setZoom(INITIAL_ZOOM);
-        setPan({ x: 0, y: 0 });
-        setUsedColors(new Set());
-      }
-    } catch (e) {
-      console.error("Failed to load document:", e);
-    }
-  }, [currentDocId]);
+    selectDocument(docId);
+  }, [currentDocId, selectDocument]);
 
-  const handleDeleteDocument = useCallback((docId: string) => {
+  const handleDeleteDocument = useCallback(async (docId: string) => {
     if (documents.length <= 1) return;
     if (!window.confirm("Delete this document? This cannot be undone.")) return;
     
-    // Remove document data from storage
-    localStorage.removeItem(getStorageKey(docId));
-    
-    const newDocs = documents.filter(d => d.id !== docId);
-    setDocuments(newDocs);
-    
-    // If deleting current document, switch to another
-    if (docId === currentDocId) {
-      const newCurrentId = newDocs[0].id;
-      handleSelectDocument(newCurrentId);
-    }
-  }, [documents, currentDocId, handleSelectDocument]);
+    await deleteDocument(docId);
+  }, [documents.length, deleteDocument]);
 
-  const handleRenameDocument = useCallback((docId: string, newName: string) => {
-    setDocuments(prev => prev.map(d => 
-      d.id === docId ? { ...d, name: newName } : d
-    ));
-  }, []);
+  const handleRenameDocument = useCallback(async (docId: string, newName: string) => {
+    await renameDocument(docId, newName);
+  }, [renameDocument]);
 
   const getNextColor = useCallback((): string => {
     // Find first unused color
@@ -689,6 +600,14 @@ export function ThoughtCanvas() {
     return () => document.removeEventListener("mouseup", handleMouseUp);
   }, [handleMouseUp]);
 
+  if (isLoading) {
+    return (
+      <div className="relative w-full h-screen overflow-hidden canvas-grid bg-canvas-bg flex items-center justify-center">
+        <div className="text-muted-foreground">Loading documents...</div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={canvasRef}
@@ -700,7 +619,7 @@ export function ThoughtCanvas() {
       style={{ cursor: isPanning ? "grabbing" : spaceHeld ? "grab" : "crosshair" }}
     >
       {/* Document picker */}
-      <div className="absolute top-4 left-4 z-10">
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
         <DocumentPicker
           documents={documents}
           currentDocId={currentDocId}
@@ -709,6 +628,11 @@ export function ThoughtCanvas() {
           onDeleteDocument={handleDeleteDocument}
           onRenameDocument={handleRenameDocument}
         />
+        {isSaving && (
+          <div className="text-xs text-muted-foreground bg-background/80 rounded px-2 py-1">
+            Saving...
+          </div>
+        )}
       </div>
 
       {/* Zoomable/pannable layer */}
