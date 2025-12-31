@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { ThoughtBubble } from "./ThoughtBubble";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize, Trash2, Download } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, Trash2, Download, Sparkles } from "lucide-react";
 import { DocumentPicker, Document } from "./DocumentPicker";
+import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +45,7 @@ const MAX_ZOOM = 10;
 const INITIAL_ZOOM = 0.5;
 
 export function ThoughtCanvas() {
+  const navigate = useNavigate();
   const {
     documents,
     currentDocument,
@@ -628,6 +630,20 @@ export function ThoughtCanvas() {
           onDeleteDocument={handleDeleteDocument}
           onRenameDocument={handleRenameDocument}
         />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const docDate = currentDocument?.createdAt 
+              ? new Date(currentDocument.createdAt).toISOString().split('T')[0]
+              : new Date().toISOString().split('T')[0];
+            navigate('/constellation', { state: { defaultDate: docDate } });
+          }}
+          className="gap-2"
+        >
+          <Sparkles className="h-4 w-4" />
+          Constellation
+        </Button>
         {isSaving && (
           <div className="text-xs text-muted-foreground bg-background/80 rounded px-2 py-1">
             Saving...

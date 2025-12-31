@@ -55,7 +55,10 @@ export function useDocuments() {
   const loadDocuments = async () => {
     try {
       setIsLoading(true);
-      const docs = await apiService.getAllDocuments();
+      const response = await apiService.getAllDocuments();
+      
+      // Handle new grouped response format
+      const docs = Array.isArray(response) ? response : response.all || [];
       
       // Convert MongoDB documents to our format
       const formattedDocs: DocumentData[] = docs.map(doc => ({

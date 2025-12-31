@@ -75,8 +75,8 @@ class ApiService {
   }
 
   // Document methods
-  async getAllDocuments(): Promise<Document[]> {
-    return this.request<Document[]>('/documents');
+  async getAllDocuments(): Promise<Document[] | { withThoughts: Document[], withoutThoughts: Document[], all: Document[] }> {
+    return this.request<any>('/documents');
   }
 
   async getDocument(id: string): Promise<Document> {

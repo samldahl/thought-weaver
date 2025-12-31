@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { AuthPage } from "./pages/Auth";
+import { ConstellationPage } from "./pages/Constellation";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 
@@ -45,6 +46,7 @@ function ProtectedRoutes() {
       </div>
       <Routes>
         <Route path="/" element={<Index />} />
+        <Route path="/constellation" element={<ConstellationPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>
