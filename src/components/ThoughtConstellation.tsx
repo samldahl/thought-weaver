@@ -87,6 +87,24 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
     showChildren: boolean;
   }>>([]);
 
+  // Gemini synthesis state
+  const [geminiSynthesis, setGeminiSynthesis] = useState<string | null>(null);
+  const [geminiQuestions, setGeminiQuestions] = useState<string[]>([]);
+  const [isLoadingGemini, setIsLoadingGemini] = useState(false);
+  const [geminiError, setGeminiError] = useState<string | null>(null);
+
+  // Semantic clustering state
+  interface SemanticCluster {
+    id: number;
+    thoughtIds: string[];
+    label: string;
+  }
+  const [semanticClusters, setSemanticClusters] = useState<SemanticCluster[]>([]);
+  const [similarityMatrix, setSimilarityMatrix] = useState<Record<string, number>>({});
+  const [isLoadingSemantics, setIsLoadingSemantics] = useState(false);
+  const [semanticsError, setSemanticsError] = useState<string | null>(null);
+  const [useSemanticClustering, setUseSemanticClustering] = useState(false);
+
   // Calculate word frequencies across all thoughts
   const wordFrequency = useMemo(() => {
     const freq: Record<string, number> = {};
@@ -620,7 +638,7 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
   };
 
   const handleReset = () => {
-    setNodes(prevNodes => 
+    setNodes(prevNodes =>
       prevNodes.map(node => ({
         ...node,
         targetX: undefined,
@@ -630,6 +648,212 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
     setIsOrganized(false);
     setClusters([]);
     setStrongConnections([]);
+  };
+
+  // Fetch Gemini-powered synthesis
+  const fetchGeminiSynthesis = async () => {
+    if (nodes.length === 0) return;
+
+    setIsLoadingGemini(true);
+    setGeminiError(null);
+
+    try {
+      const thoughtData = nodes.map(node => ({
+        id: node.id,
+        text: node.text,
+        connections: node.connections,
+        documentName: node.documentName
+      }));
+
+      const patternData = patterns.map(p => ({
+        type: p.type,
+        description: p.description,
+        count: p.thoughtIds.length
+      }));
+
+      const hubs = nodes.filter(n => n.connections.length >= 3);
+      const isolated = nodes.filter(n => n.connections.length === 0);
+      const totalConnections = nodes.reduce((sum, n) => sum + n.connections.length, 0) / 2;
+
+      const statsData = {
+        totalThoughts: nodes.length,
+        totalConnections,
+        avgConnections: nodes.length > 0 ? totalConnections / nodes.length : 0,
+        clusters: nodes.filter(n => (n.touchCount || 0) >= 3).length,
+        isolatedCount: isolated.length
+      };
+
+      const response = await fetch('http://localhost:5001/api/documents/thoughts/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ thoughts: thoughtData, patterns: patternData, stats: statsData })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate synthesis');
+      }
+
+      const result = await response.json();
+      setGeminiSynthesis(result.synthesis);
+      setGeminiQuestions(result.questions || []);
+    } catch (error) {
+      console.error('Gemini synthesis error:', error);
+      setGeminiError(error instanceof Error ? error.message : 'Failed to generate AI synthesis');
+    } finally {
+      setIsLoadingGemini(false);
+    }
+  };
+
+  // Fetch semantic embeddings and clustering from Gemini
+  const fetchSemanticClustering = async () => {
+    if (thoughts.length === 0) return;
+
+    setIsLoadingSemantics(true);
+    setSemanticsError(null);
+
+    try {
+      const thoughtData = thoughts.map(t => ({
+        id: t.id,
+        text: t.text
+      }));
+
+      const response = await fetch('http://localhost:5001/api/documents/thoughts/embeddings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ thoughts: thoughtData })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get embeddings');
+      }
+
+      const result = await response.json();
+      setSimilarityMatrix(result.similarityMatrix);
+      setSemanticClusters(result.clusters);
+      setUseSemanticClustering(true);
+
+      // Rebuild nodes with semantic connections
+      rebuildNodesWithSemantics(result.similarityMatrix, result.clusters);
+    } catch (error) {
+      console.error('Semantic clustering error:', error);
+      setSemanticsError(error instanceof Error ? error.message : 'Failed to get semantic clustering');
+    } finally {
+      setIsLoadingSemantics(false);
+    }
+  };
+
+  // Rebuild nodes using semantic similarity
+  const rebuildNodesWithSemantics = (
+    simMatrix: Record<string, number>,
+    clusters: SemanticCluster[]
+  ) => {
+    // Calculate prevalence
+    const calculatePrevalence = (thought: Thought): number => {
+      if (!thought.text) return 0;
+      const words = thought.text.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      let score = 0;
+      words.forEach(word => {
+        const freq = wordFrequency[word] || 1;
+        score += Math.log(freq + 1);
+      });
+      return score / Math.max(words.length, 1);
+    };
+
+    // Get semantic similarity between two thoughts
+    const getSemanticSimilarity = (id1: string, id2: string): number => {
+      const key1 = `${id1}-${id2}`;
+      const key2 = `${id2}-${id1}`;
+      return simMatrix[key1] ?? simMatrix[key2] ?? 0;
+    };
+
+    // Initialize nodes
+    const initialNodes: ThoughtNode[] = thoughts.map((thought) => {
+      const prevalence = calculatePrevalence(thought);
+      return {
+        id: thought.id,
+        text: thought.text,
+        color: thought.color,
+        documentName: thought.documentName,
+        x: Math.random() * 2400,
+        y: Math.random() * 1600,
+        vx: 0,
+        vy: 0,
+        radius: Math.max(97.5, Math.min(195, 97.5 + prevalence * 29.25)),
+        connections: [],
+        prevalence
+      };
+    });
+
+    // Build connections using semantic similarity (threshold 0.7)
+    initialNodes.forEach(node => {
+      thoughts.forEach(otherThought => {
+        if (node.id !== otherThought.id) {
+          const similarity = getSemanticSimilarity(node.id, otherThought.id);
+          if (similarity > 0.7) {
+            node.connections.push(otherThought.id);
+          }
+        }
+      });
+    });
+
+    // Group by semantic clusters instead of merging
+    const clusterColorMap: Record<number, string> = {};
+    const pastelColors = [
+      'rgba(147, 197, 253, 0.3)', // blue
+      'rgba(196, 181, 253, 0.3)', // purple
+      'rgba(167, 243, 208, 0.3)', // green
+      'rgba(253, 186, 116, 0.3)', // orange
+      'rgba(252, 165, 165, 0.3)', // red
+      'rgba(253, 224, 71, 0.3)',  // yellow
+    ];
+
+    clusters.forEach((cluster, idx) => {
+      clusterColorMap[cluster.id] = pastelColors[idx % pastelColors.length];
+    });
+
+    // Apply density-based sizing
+    const densityScaledNodes = initialNodes.map(node => {
+      const baseRadius = node.radius;
+      let touchCount = 0;
+
+      initialNodes.forEach(other => {
+        if (other.id === node.id) return;
+        const dx = node.x - other.x;
+        const dy = node.y - other.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const sumOfRadii = baseRadius + other.radius;
+        if (distance < sumOfRadii) {
+          touchCount++;
+        }
+      });
+
+      const newRadius = baseRadius * (1 + (touchCount * 0.25));
+      return { ...node, baseRadius, touchCount, radius: newRadius };
+    });
+
+    setNodes(densityScaledNodes);
+
+    // Update clusters state for visualization
+    const visualClusters: Cluster[] = clusters
+      .filter(c => c.label !== 'Unclustered')
+      .map(c => {
+        const clusterNodes = densityScaledNodes.filter(n => c.thoughtIds.includes(n.id));
+        const centerX = clusterNodes.reduce((sum, n) => sum + n.x, 0) / clusterNodes.length || 1200;
+        const centerY = clusterNodes.reduce((sum, n) => sum + n.y, 0) / clusterNodes.length || 800;
+        return {
+          name: c.label,
+          thoughtIds: c.thoughtIds,
+          centerX,
+          centerY
+        };
+      });
+
+    setClusters(visualClusters);
+    setIsOrganized(true);
   };
 
   // Zoom and Pan handlers
@@ -933,34 +1157,68 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
 
       // Draw cluster backgrounds if organized
       if (isOrganized && clusters.length > 0) {
+        // Pastel colors for different clusters
+        const clusterColors = [
+          { fill: 'rgba(147, 197, 253, 0.08)', stroke: 'rgba(59, 130, 246, 0.4)', text: 'rgba(59, 130, 246, 0.9)' },  // blue
+          { fill: 'rgba(196, 181, 253, 0.08)', stroke: 'rgba(139, 92, 246, 0.4)', text: 'rgba(139, 92, 246, 0.9)' },  // purple
+          { fill: 'rgba(167, 243, 208, 0.08)', stroke: 'rgba(16, 185, 129, 0.4)', text: 'rgba(16, 185, 129, 0.9)' },  // green
+          { fill: 'rgba(253, 186, 116, 0.08)', stroke: 'rgba(245, 158, 11, 0.4)', text: 'rgba(245, 158, 11, 0.9)' },  // orange
+          { fill: 'rgba(252, 165, 165, 0.08)', stroke: 'rgba(239, 68, 68, 0.4)', text: 'rgba(239, 68, 68, 0.9)' },    // red
+          { fill: 'rgba(253, 224, 71, 0.08)', stroke: 'rgba(234, 179, 8, 0.4)', text: 'rgba(234, 179, 8, 0.9)' },     // yellow
+        ];
+
         clusters.forEach((cluster, idx) => {
           const clusterNodes = updatedNodes.filter(n => cluster.thoughtIds.includes(n.id));
           if (clusterNodes.length === 0) return;
-          
-          // Find bounds
+
+          const colors = clusterColors[idx % clusterColors.length];
+
+          // Calculate center and average radius for blob-like shape
+          const centerX = clusterNodes.reduce((sum, n) => sum + n.x, 0) / clusterNodes.length;
+          const centerY = clusterNodes.reduce((sum, n) => sum + n.y, 0) / clusterNodes.length;
+
+          // Find bounds with padding based on node sizes
+          const padding = 60;
           const xs = clusterNodes.map(n => n.x);
           const ys = clusterNodes.map(n => n.y);
-          const minX = Math.min(...xs) - 40;
-          const maxX = Math.max(...xs) + 40;
-          const minY = Math.min(...ys) - 40;
-          const maxY = Math.max(...ys) + 40;
-          
-          // Draw cluster background - more subtle
-          ctx.fillStyle = `rgba(139, 92, 246, 0.02)`;
-          ctx.strokeStyle = `rgba(139, 92, 246, 0.2)`;
-          ctx.lineWidth = 1;
-          ctx.setLineDash([8, 8]);
+          const minX = Math.min(...xs) - padding;
+          const maxX = Math.max(...xs) + padding;
+          const minY = Math.min(...ys) - padding;
+          const maxY = Math.max(...ys) + padding;
+
+          // Draw blob-like background using bezier curves
+          ctx.fillStyle = colors.fill;
+          ctx.strokeStyle = colors.stroke;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+
+          // Create smooth rounded shape
+          const rx = (maxX - minX) / 2;
+          const ry = (maxY - minY) / 2;
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+
           ctx.beginPath();
-          ctx.roundRect(minX, minY, maxX - minX, maxY - minY, 15);
+          ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
           ctx.setLineDash([]);
-          
-          // Draw cluster label
-          ctx.fillStyle = 'rgba(139, 92, 246, 0.8)';
-          ctx.font = 'bold 12px sans-serif';
+
+          // Draw cluster label with background
+          const labelY = minY - 15;
+          ctx.font = 'bold 14px system-ui, sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(cluster.name, (minX + maxX) / 2, minY - 10);
+          const labelWidth = ctx.measureText(cluster.name).width + 16;
+
+          // Label background pill
+          ctx.fillStyle = colors.stroke;
+          ctx.beginPath();
+          ctx.roundRect(cx - labelWidth / 2, labelY - 12, labelWidth, 22, 11);
+          ctx.fill();
+
+          // Label text
+          ctx.fillStyle = 'white';
+          ctx.fillText(cluster.name, cx, labelY + 2);
         });
       }
 
@@ -1331,15 +1589,27 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
               </Button>
             )}
             {!isOrganized ? (
-              <Button
-                onClick={handleOrganize}
-                disabled={isOrganizing || thoughts.length === 0}
-                size="sm"
-                className="gap-2"
-              >
-                <Sparkles className="h-4 w-4" />
-                {isOrganizing ? 'Organizing...' : 'Connect the Dots'}
-              </Button>
+              <>
+                <Button
+                  onClick={handleOrganize}
+                  disabled={isOrganizing || thoughts.length === 0}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {isOrganizing ? 'Organizing...' : 'Connect the Dots'}
+                </Button>
+                <Button
+                  onClick={fetchSemanticClustering}
+                  disabled={isLoadingSemantics || thoughts.length === 0}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2 border-purple-500 text-purple-600 hover:bg-purple-50"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {isLoadingSemantics ? 'Analyzing...' : 'AI Cluster'}
+                </Button>
+              </>
             ) : (
               <Button
                 onClick={handleReset}
@@ -1481,27 +1751,92 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
         </h3>
         
         <ScrollArea className="h-[600px] pr-4">
-          {/* Synthesis Summary */}
+          {/* AI Synthesis Summary */}
           <div className="mb-6">
             <Card className="p-4 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-purple-500/20">
-              <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                ✨ Thought Synthesis
-              </h4>
-              <p className="text-sm leading-relaxed text-foreground/90" dangerouslySetInnerHTML={{ 
-                __html: synthesis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
-              }} />
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  ✨ Thought Synthesis
+                </h4>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={fetchGeminiSynthesis}
+                  disabled={isLoadingGemini || nodes.length === 0}
+                  className="h-7 text-xs"
+                >
+                  {isLoadingGemini ? (
+                    <>
+                      <RotateCcw className="h-3 w-3 mr-1 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      {geminiSynthesis ? 'Regenerate' : 'AI Analyze'}
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {geminiError && (
+                <div className="text-xs text-red-500 mb-2 p-2 bg-red-500/10 rounded">
+                  {geminiError}
+                </div>
+              )}
+
+              {geminiSynthesis ? (
+                <div className="space-y-2">
+                  <Badge variant="outline" className="text-[10px] mb-2">
+                    <Sparkles className="h-2 w-2 mr-1" />
+                    AI Generated
+                  </Badge>
+                  <p className="text-sm leading-relaxed text-foreground/90" dangerouslySetInnerHTML={{
+                    __html: geminiSynthesis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                  }} />
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed text-foreground/90" dangerouslySetInnerHTML={{
+                  __html: synthesis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                }} />
+              )}
             </Card>
           </div>
+
+          {/* Gemini AI Questions */}
+          {geminiQuestions.length > 0 && (
+            <div className="mb-6">
+              <Card className="p-4 bg-gradient-to-br from-green-500/10 to-blue-500/10 border-green-500/20">
+                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-green-500" />
+                  AI Questions to Explore
+                </h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Questions to help you discover deeper connections
+                </p>
+                <div className="space-y-2">
+                  {geminiQuestions.map((question, i) => (
+                    <div key={i} className="p-3 bg-background/50 rounded-lg border border-green-500/30">
+                      <div className="flex items-start gap-2">
+                        <span className="text-green-500 font-bold text-xs">{i + 1}.</span>
+                        <p className="text-sm leading-relaxed">{question}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          )}
 
           {/* AI Path Questions - Help clarify connections */}
           {aiQuestions.length > 0 && (
             <div className="mb-6">
               <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-blue-500/20">
                 <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                  🤔 AI Questions - Finding Your Path
+                  🤔 Pattern Questions
                 </h4>
                 <p className="text-xs text-muted-foreground mb-3">
-                  The AI analyzed your overlapping thoughts to help you understand the connections
+                  Questions based on overlapping thought patterns
                 </p>
                 <div className="space-y-3">
                   {aiQuestions.map((item, i) => (

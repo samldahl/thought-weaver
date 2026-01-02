@@ -3,6 +3,7 @@ import { DocumentModel } from '../models/Document';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { ensureTodayDocument } from '../utils/dailyDocument';
 import { organizeThoughtsWithAI } from '../utils/aiOrganizer';
+import { generateGeminiSynthesis, getThoughtEmbeddings } from '../utils/geminiService';
 
 const router = express.Router();
 
@@ -116,16 +117,64 @@ router.get('/thoughts/all', async (req: AuthRequest, res: Response) => {
 router.post('/thoughts/organize', async (req: AuthRequest, res: Response) => {
   try {
     const { thoughts } = req.body;
-    
+
     if (!thoughts || !Array.isArray(thoughts)) {
       return res.status(400).json({ error: 'Invalid thoughts data' });
     }
-    
+
     const organized = await organizeThoughtsWithAI(thoughts);
     res.json(organized);
   } catch (error) {
     console.error('Failed to organize thoughts:', error);
     res.status(500).json({ error: 'Failed to organize thoughts' });
+  }
+});
+
+// Gemini-powered synthesis endpoint
+router.post('/thoughts/synthesize', async (req: AuthRequest, res: Response) => {
+  try {
+    const { thoughts, patterns, stats } = req.body;
+
+    if (!thoughts || !Array.isArray(thoughts)) {
+      return res.status(400).json({ error: 'Invalid thoughts data' });
+    }
+
+    const result = await generateGeminiSynthesis(
+      thoughts,
+      patterns || [],
+      stats || { totalThoughts: thoughts.length, totalConnections: 0, avgConnections: 0, clusters: 0, isolatedCount: 0 }
+    );
+
+    if (result.error) {
+      return res.status(500).json({ error: result.error, fallback: true });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Failed to generate synthesis:', error);
+    res.status(500).json({ error: 'Failed to generate synthesis', fallback: true });
+  }
+});
+
+// Gemini embeddings for semantic clustering
+router.post('/thoughts/embeddings', async (req: AuthRequest, res: Response) => {
+  try {
+    const { thoughts } = req.body;
+
+    if (!thoughts || !Array.isArray(thoughts)) {
+      return res.status(400).json({ error: 'Invalid thoughts data' });
+    }
+
+    const result = await getThoughtEmbeddings(thoughts);
+
+    if (result.error) {
+      return res.status(500).json({ error: result.error, fallback: true });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Failed to get embeddings:', error);
+    res.status(500).json({ error: 'Failed to get embeddings', fallback: true });
   }
 });
 
