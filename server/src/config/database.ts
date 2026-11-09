@@ -1,10 +1,9 @@
 import mongoose from 'mongoose';
+import { env } from './env';
 
 export const connectDB = async (): Promise<void> => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/thought-weaver';
-    
-    await mongoose.connect(mongoURI);
+    await mongoose.connect(env.MONGODB_URI);
     
     console.log('MongoDB connected successfully');
   } catch (error) {

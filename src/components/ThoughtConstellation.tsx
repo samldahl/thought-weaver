@@ -87,11 +87,11 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
     showChildren: boolean;
   }>>([]);
 
-  // Gemini synthesis state
-  const [geminiSynthesis, setGeminiSynthesis] = useState<string | null>(null);
-  const [geminiQuestions, setGeminiQuestions] = useState<string[]>([]);
-  const [isLoadingGemini, setIsLoadingGemini] = useState(false);
-  const [geminiError, setGeminiError] = useState<string | null>(null);
+  // AI synthesis state
+  const [aiSynthesis, setAiSynthesis] = useState<string | null>(null);
+  const [synthesisQuestions, setSynthesisQuestions] = useState<string[]>([]);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Semantic clustering state
   interface SemanticCluster {
@@ -650,12 +650,12 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
     setStrongConnections([]);
   };
 
-  // Fetch Gemini-powered synthesis
-  const fetchGeminiSynthesis = async () => {
+  // Fetch Claude-powered synthesis
+  const fetchAiSynthesis = async () => {
     if (nodes.length === 0) return;
 
-    setIsLoadingGemini(true);
-    setGeminiError(null);
+    setIsLoadingAi(true);
+    setAiError(null);
 
     try {
       const thoughtData = nodes.map(node => ({
@@ -696,17 +696,17 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
       }
 
       const result = await response.json();
-      setGeminiSynthesis(result.synthesis);
-      setGeminiQuestions(result.questions || []);
+      setAiSynthesis(result.synthesis);
+      setSynthesisQuestions(result.questions || []);
     } catch (error) {
-      console.error('Gemini synthesis error:', error);
-      setGeminiError(error instanceof Error ? error.message : 'Failed to generate AI synthesis');
+      console.error('AI synthesis error:', error);
+      setAiError(error instanceof Error ? error.message : 'Failed to generate AI synthesis');
     } finally {
-      setIsLoadingGemini(false);
+      setIsLoadingAi(false);
     }
   };
 
-  // Fetch semantic embeddings and clustering from Gemini
+  // Fetch semantic clustering from Claude
   const fetchSemanticClustering = async () => {
     if (thoughts.length === 0) return;
 
@@ -1761,11 +1761,11 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={fetchGeminiSynthesis}
-                  disabled={isLoadingGemini || nodes.length === 0}
+                  onClick={fetchAiSynthesis}
+                  disabled={isLoadingAi || nodes.length === 0}
                   className="h-7 text-xs"
                 >
-                  {isLoadingGemini ? (
+                  {isLoadingAi ? (
                     <>
                       <RotateCcw className="h-3 w-3 mr-1 animate-spin" />
                       Analyzing...
@@ -1773,26 +1773,26 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
                   ) : (
                     <>
                       <Sparkles className="h-3 w-3 mr-1" />
-                      {geminiSynthesis ? 'Regenerate' : 'AI Analyze'}
+                      {aiSynthesis ? 'Regenerate' : 'AI Analyze'}
                     </>
                   )}
                 </Button>
               </div>
 
-              {geminiError && (
+              {aiError && (
                 <div className="text-xs text-red-500 mb-2 p-2 bg-red-500/10 rounded">
-                  {geminiError}
+                  {aiError}
                 </div>
               )}
 
-              {geminiSynthesis ? (
+              {aiSynthesis ? (
                 <div className="space-y-2">
                   <Badge variant="outline" className="text-[10px] mb-2">
                     <Sparkles className="h-2 w-2 mr-1" />
                     AI Generated
                   </Badge>
                   <p className="text-sm leading-relaxed text-foreground/90" dangerouslySetInnerHTML={{
-                    __html: geminiSynthesis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    __html: aiSynthesis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                   }} />
                 </div>
               ) : (
@@ -1803,8 +1803,8 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
             </Card>
           </div>
 
-          {/* Gemini AI Questions */}
-          {geminiQuestions.length > 0 && (
+          {/* AI Questions */}
+          {synthesisQuestions.length > 0 && (
             <div className="mb-6">
               <Card className="p-4 bg-gradient-to-br from-green-500/10 to-blue-500/10 border-green-500/20">
                 <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
@@ -1815,7 +1815,7 @@ export function ThoughtConstellation({ thoughts }: { thoughts: Thought[] }) {
                   Questions to help you discover deeper connections
                 </p>
                 <div className="space-y-2">
-                  {geminiQuestions.map((question, i) => (
+                  {synthesisQuestions.map((question, i) => (
                     <div key={i} className="p-3 bg-background/50 rounded-lg border border-green-500/30">
                       <div className="flex items-start gap-2">
                         <span className="text-green-500 font-bold text-xs">{i + 1}.</span>

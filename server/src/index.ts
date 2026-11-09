@@ -1,17 +1,14 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
+import { env } from './config/env';
 import { connectDB } from './config/database';
 import documentRoutes from './routes/documents';
 import authRoutes from './routes/auth';
 
-dotenv.config();
-
 const app: Application = express();
-const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/thought-weaver';
+const PORT = env.PORT;
 
 // Middleware
 app.use(cors({
@@ -30,11 +27,11 @@ app.use(express.json());
 // Session configuration
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
+    secret: env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-      mongoUrl: MONGODB_URI,
+      mongoUrl: env.MONGODB_URI,
       touchAfter: 24 * 3600, // lazy session update
     }),
     cookie: {

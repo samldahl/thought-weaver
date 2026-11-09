@@ -3,7 +3,7 @@ import { DocumentModel } from '../models/Document';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { ensureTodayDocument } from '../utils/dailyDocument';
 import { organizeThoughtsWithAI } from '../utils/aiOrganizer';
-import { generateGeminiSynthesis, getThoughtEmbeddings } from '../utils/geminiService';
+import { generateSynthesis, getThoughtSemantics } from '../utils/claudeService';
 
 const router = express.Router();
 
@@ -130,7 +130,7 @@ router.post('/thoughts/organize', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Gemini-powered synthesis endpoint
+// Claude-powered synthesis endpoint
 router.post('/thoughts/synthesize', async (req: AuthRequest, res: Response) => {
   try {
     const { thoughts, patterns, stats } = req.body;
@@ -139,7 +139,7 @@ router.post('/thoughts/synthesize', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Invalid thoughts data' });
     }
 
-    const result = await generateGeminiSynthesis(
+    const result = await generateSynthesis(
       thoughts,
       patterns || [],
       stats || { totalThoughts: thoughts.length, totalConnections: 0, avgConnections: 0, clusters: 0, isolatedCount: 0 }
@@ -156,7 +156,7 @@ router.post('/thoughts/synthesize', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Gemini embeddings for semantic clustering
+// Claude-powered semantic clustering
 router.post('/thoughts/embeddings', async (req: AuthRequest, res: Response) => {
   try {
     const { thoughts } = req.body;
@@ -165,7 +165,7 @@ router.post('/thoughts/embeddings', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Invalid thoughts data' });
     }
 
-    const result = await getThoughtEmbeddings(thoughts);
+    const result = await getThoughtSemantics(thoughts);
 
     if (result.error) {
       return res.status(500).json({ error: result.error, fallback: true });
